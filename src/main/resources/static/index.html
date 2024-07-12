@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="UTF-8"/>
+    <title>实时日志</title>
+    <style>
+        body {
+            height: 98vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        body > div:first-of-type {
+            padding: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        body > div:first-of-type * {
+            font-size: 18px;
+        }
+
+        .log-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background-color: black;
+        }
+
+        pre {
+            line-height: 18px;
+            margin: 0;
+            color: rgb(75, 196, 75);
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+    </style>
+    <script>
+        let websocket;
+        let showLineNumber;
+
+        function readLog(server, keyword) {
+            const logContainer = document.getElementById("log-container");
+            if (websocket) {
+                websocket.close();
+                logContainer.innerHTML = "";
+            }
+            websocket = new WebSocket(
+                `ws://${
+                    window.location.host
+                }/log?serverId=${server}&number=${Math.min(
+                    showLineNumber,
+                    1000
+                )}&keyword=${keyword === undefined ? "" : keyword}`
+            );
+            let currentP = null;
+            websocket.onmessage = function (event) {
+                if (!event.data) {
+                    return;
+                }
+                if (currentP == null) {
+                    currentP = document.createElement("pre");
+                    logContainer.appendChild(currentP);
+                }
+                const data = event.data
+                let str = currentP.innerText;
+                for (let i = 0; i < data.length; i++) {
+                    const c = data.charAt(i);
+                    if (c === "\n") {
+                        if (keyword) {
+                            // 使用 split 方法将字符串分割成关键字和其他部分
+                            const parts = str.split(new RegExp(`(${keyword})`, "gi"));
+                            parts.forEach((part) => {
+                                if (part.toLowerCase() === keyword.toLowerCase()) {
+                                    const textElement = document.createElement("text");
+                                    textElement.textContent = part;
+                                    textElement.style.color = "green";
+                                    textElement.style.backgroundColor = "aqua";
+                                    currentP.appendChild(textElement);
+                                } else {
+                                    const textNode = document.createTextNode(part);
+                                    currentP.appendChild(textNode);
+                                }
+                            });
+                        } else {
+                            currentP.innerText = str;
+                        }
+
+                        currentP = document.createElement("pre");
+                        logContainer.appendChild(currentP);
+                        logContainer.scrollTop = logContainer.scrollHeight;
+                        str = "";
+                        while (
+                            showLineNumber !== -1 &&
+                            logContainer.childNodes.length > showLineNumber
+                            ) {
+                            logContainer.childNodes.item(0).remove();
+                        }
+                    } else {
+                        str += c;
+                    }
+                }
+                if (str) {
+                    if (keyword) {
+                        // 使用 split 方法将字符串分割成关键字和其他部分
+                        const parts = str.split(new RegExp(`(${keyword})`, "gi"));
+                        parts.forEach((part) => {
+                            if (part.toLowerCase() === keyword.toLowerCase()) {
+                                const textElement = document.createElement("text");
+                                textElement.textContent = part;
+                                textElement.style.color = "green";
+                                textElement.style.backgroundColor = "aqua";
+                                currentP.appendChild(textElement);
+                            } else {
+                                const textNode = document.createTextNode(part);
+                                currentP.appendChild(textNode);
+                            }
+                        });
+                    } else {
+                        currentP.innerText = str;
+                    }
+                    logContainer.scrollTop = logContainer.scrollHeight;
+                }
+            };
+        }
+
+        function getConfig() {
+            const configStr =
+                window.localStorage.getItem("config") ||
+                '{"server": "cp-scheduling", "showLineNumber": 1000}';
+            return JSON.parse(configStr);
+        }
+
+        function saveConfig(config) {
+            window.localStorage.setItem("config", JSON.stringify(config));
+        }
+
+        window.onload = () => {
+            const config = getConfig();
+            const showLineNumberEl = document.getElementById("lineNumberSelect");
+            showLineNumber = config.showLineNumber;
+            showLineNumberEl.value = showLineNumber + "";
+            showLineNumberEl.addEventListener("change", () => {
+                showLineNumber = parseInt(showLineNumberEl.value);
+                config.showLineNumber = showLineNumber;
+                saveConfig(config);
+            });
+
+            keyword = document.getElementById("keyword");
+            serverSelect = document.getElementById("serverSelect");
+            serverSelect.value = config.server;
+
+            let reload = () => {
+                readLog(serverSelect.value, keyword.value);
+                config.server = serverSelect.value;
+                saveConfig(config);
+            };
+
+            serverSelect.addEventListener("change", reload);
+            keyword.addEventListener("change", reload);
+
+            readLog(config.server);
+        };
+    </script>
+</head>
+<body>
+<div>
+    <div>
+        服务:<select id="serverSelect">
+        <option value="cp-scheduling">排课</option>
+        <option value="wk-crm">CRM</option>
+        <option value="ca-studio">花果</option>
+        <option value="stu-center">学员中心</option>
+        <option value="tch-studio">老师工作室</option>
+        <option value="cp-automation">账务自动化</option>
+        <option value="wk-talk-cloud">拓课云</option>
+        <option value="ms-e-commerce">电商</option>
+        <option value="cp-gateway">筋斗云</option>
+        <option value="cp-notification">通知服务</option>
+        <option value="ms-cms">ms-cms</option>
+        <option value="cp-public">cp-public</option>
+        <option value="data-service">data-service</option>
+        <option value="ms-account">账号C端</option>
+        <option value="ms-account-business">账号B端</option>
+        <option value="ms-ai">ms-ai</option>
+        <option value="ms-course-resource">ms-course-resource</option>
+        <option value="ms-event-tracking">埋点</option>
+        <option value="ms-im">ms-im</option>
+        <option value="ms-user">ms-user</option>
+        <option value="ms-wechat">ms-wechat</option>
+        <option value="rs-gateway">增长</option>
+        <option value="tch-learning-center">tch-learning-center</option>
+        <option value="tch-research">教研</option>
+        <option value="teaching-admin">teaching-admin</option>
+        <option value="wk-business-gateway">网关B端</option>
+        <option value="wk-classin">wk-classin</option>
+        <option value="wk-classroom-fail-safe">应急服务</option>
+        <option value="wk-finance">账务服务</option>
+        <option value="wk-flowable">工作流</option>
+        <option value="wk-gateway">网关</option>
+        <option value="wk-monitor-admin">wk-monitor-admin</option>
+        <option value="wk-reporting">wk-reporting</option>
+    </select>
+        显示行数:<select id="lineNumberSelect">
+        <option value="100">100</option>
+        <option value="1000">1000</option>
+        <option value="10000">10000</option>
+        <option value="-1">无限制</option>
+    </select>
+        关键字:<input id="keyword"/>
+    </div>
+    <div>按ctrl+F 搜索日志</div>
+</div>
+<div id="log-container" class="log-content"></div>
+</body>
+</html>

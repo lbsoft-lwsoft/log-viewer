@@ -1,0 +1,242 @@
+package org.example;
+
+import io.netty.bootstrap.ServerBootstrap;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.*;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.codec.http.*;
+import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
+import io.netty.handler.codec.http.websocketx.WebSocketFrame;
+import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
+import io.netty.util.AttributeKey;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.yaml.snakeyaml.Yaml;
+
+import java.io.*;
+import java.net.URI;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.concurrent.locks.ReentrantLock;
+
+public class Main {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
+
+    public static void main(String[] args) throws InterruptedException {
+        final var config = getServerLogConfig();
+        if (config == null) {
+            var currentDir = System.getProperty("user.dir");
+            LOGGER.error("No config found or Config format error, please check {}{}config.yaml", currentDir, File.separator);
+            return;
+        }
+        if (config.getPort() == null) {
+            LOGGER.error("Please config server.port");
+            return;
+        }
+        EventLoopGroup bossGroup = new NioEventLoopGroup(1, Thread.ofPlatform().factory());
+        EventLoopGroup workerGroup = new NioEventLoopGroup(0, Thread.ofVirtual().factory());
+        ServerBootstrap b = new ServerBootstrap();
+        b.group(bossGroup, workerGroup)
+                .channel(NioServerSocketChannel.class)
+                .childHandler(new ChannelInitializer<SocketChannel>() {
+                    @Override
+                    public void initChannel(SocketChannel ch) {
+                        ch.pipeline().addLast(new HttpServerCodec());
+                        ch.pipeline().addLast(new HttpObjectAggregator(65536));
+                        ch.pipeline().addLast(new WebSocketServerProtocolHandler("/log", true));
+                        ch.pipeline().addLast(new HttpServerHandler());
+                        ch.pipeline().addLast(new WebSocketFrameHandler(config.getFiles()));
+                    }
+                });
+        ChannelFuture f = b.bind(config.getPort()).sync();
+        f.channel().closeFuture().addListener(future -> {
+            workerGroup.shutdownGracefully();
+            bossGroup.shutdownGracefully();
+        });
+    }
+
+    private static Config getServerLogConfig() {
+        var currentDir = System.getProperty("user.dir");
+        Yaml yaml = new Yaml();
+        try (InputStream inputStream = new FileInputStream(currentDir + File.separator + "config.yaml")) {
+            return yaml.loadAs(inputStream, Config.class);
+        } catch (IOException ignored) {
+        }
+        return null;
+    }
+
+    public static class HttpServerHandler extends SimpleChannelInboundHandler<HttpObject> {
+
+        private final ByteBuf htmlContent;
+
+        public HttpServerHandler() {
+            try (var in = Main.class.getClassLoader().getResourceAsStream("./static/index.html"); var out = new ByteArrayOutputStream()) {
+                if (in == null) {
+                    throw new RuntimeException("File not found, static/index.html");
+                }
+                int index;
+                var buf = new byte[1024];
+                while ((index = in.read(buf)) != -1) {
+                    out.write(buf, 0, index);
+                }
+                htmlContent = Unpooled.copiedBuffer(out.toByteArray());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        @Override
+        protected void channelRead0(ChannelHandlerContext ctx, HttpObject msg) {
+            if (msg instanceof HttpRequest) {
+                FullHttpResponse response = new DefaultFullHttpResponse(
+                        HttpVersion.HTTP_1_1,
+                        HttpResponseStatus.OK,
+                        this.htmlContent);
+                response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+                response.headers().set(HttpHeaderNames.CONTENT_LENGTH, this.htmlContent.readableBytes());
+                ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
+            }
+        }
+    }
+
+    public static class WebSocketFrameHandler extends SimpleChannelInboundHandler<WebSocketFrame> {
+
+        private static final AttributeKey<String> WEB_SOCKET_FLAG = AttributeKey.valueOf("WebSocket");
+        private final ReentrantLock lock = new ReentrantLock();
+        private final FileWatcher watcher = new FileWatcher();
+        private final Map<String, Set<Channel>> serverWatchingSessionMap = new HashMap<>();
+        private final Map<String, String> serverFilePath;
+
+        public WebSocketFrameHandler(final Map<String, String> serverFilePath) {
+            this.serverFilePath = serverFilePath;
+        }
+
+        @Override
+        public void userEventTriggered(final ChannelHandlerContext ctx, final Object evt) throws Exception {
+            if (evt instanceof WebSocketServerProtocolHandler.HandshakeComplete e) {
+                final var serverId = getQueryParam(URI.create(e.requestUri()), "serverId");
+                final var numberStr = getQueryParam(URI.create(e.requestUri()), "number");
+                if (serverId == null || !serverFilePath.containsKey(serverId) || numberStr == null) {
+                    ctx.channel().close();
+                    return;
+                }
+                lock.lock();
+                try {
+                    final var str = TailReader.readLastNLines(new File(this.serverFilePath.get(serverId))
+                            , Integer.parseInt(numberStr));
+                    ctx.channel().writeAndFlush(new TextWebSocketFrame(str));
+                    this.createWatcher(serverId);
+                    this.serverWatchingSessionMap.computeIfAbsent(serverId, k -> new HashSet<>()).add(ctx.channel());
+                } catch (Exception exception) {
+                    ctx.channel().close();
+                } finally {
+                    lock.unlock();
+                }
+                ctx.channel().attr(WEB_SOCKET_FLAG);
+            } else {
+                super.userEventTriggered(ctx, evt);
+            }
+        }
+
+        @Override
+        public void channelInactive(final ChannelHandlerContext ctx) throws Exception {
+            if (ctx.channel().hasAttr(WEB_SOCKET_FLAG)) {
+                lock.lock();
+                try {
+                    final var iterator = this.serverWatchingSessionMap.entrySet().iterator();
+                    while (iterator.hasNext()) {
+                        final var entry = iterator.next();
+                        if (entry.getValue().contains(ctx.channel())) {
+                            entry.getValue().remove(ctx.channel());
+                            if (entry.getValue().isEmpty()) {
+                                iterator.remove();
+                                this.watcher.remove(new File(this.serverFilePath.get(entry.getKey())));
+                            }
+                        }
+                    }
+                } finally {
+                    lock.unlock();
+                }
+            }
+            super.channelInactive(ctx);
+        }
+
+        @Override
+        protected void channelRead0(final ChannelHandlerContext ctx, final WebSocketFrame msg) {
+        }
+
+        private String getQueryParam(final URI uri, final String paramName) {
+            final var query = Optional.ofNullable(uri)
+                    .map(URI::getQuery)
+                    .orElse(null);
+            if (query == null) {
+                return null;
+            }
+            return Arrays.stream(query.split("&"))
+                    .map(str -> str.split("="))
+                    .filter(str -> str.length == 2)
+                    .filter(str -> str[0].equals(paramName))
+                    .map(str -> str[1])
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        private void createWatcher(final String serverId) throws IOException {
+            final var file = new File(this.serverFilePath.get(serverId));
+            if (!watcher.contains(file)) {
+                this.watcher.addListener(file, new Sender(serverId));
+            }
+        }
+
+        public class Sender implements FileWatcher.FileChangeHandler {
+
+            private final CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder();
+            private final CharBuffer charBuffer = CharBuffer.allocate(1024);
+            private final String serverId;
+
+            public Sender(final String serverId) {
+                this.serverId = serverId;
+            }
+
+            @Override
+            public void handle(final ByteBuffer buffer) {
+                decoder.decode(buffer, charBuffer, false);
+                charBuffer.flip();
+                final var message = charBuffer.toString();
+                charBuffer.clear();
+                for (final Channel channel : WebSocketFrameHandler.this.serverWatchingSessionMap
+                        .getOrDefault(serverId, Collections.emptySet())) {
+                    channel.writeAndFlush(new TextWebSocketFrame(message));
+                }
+            }
+        }
+    }
+
+    public static class Config {
+        Integer port;
+        Map<String, String> files;
+
+        public Integer getPort() {
+            return port;
+        }
+
+        public void setPort(final Integer port) {
+            this.port = port;
+        }
+
+        public Map<String, String> getFiles() {
+            return files;
+        }
+
+        public void setFiles(final Map<String, String> files) {
+            this.files = files;
+        }
+    }
+}
