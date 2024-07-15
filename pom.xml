@@ -53,9 +53,7 @@
                     <buildArgs>
                         <buildArg>-H:+UnlockExperimentalVMOptions</buildArg>
                         <buildArg>-H:-CheckToolchain</buildArg>
-<!--                        <buildArg>-H:IncludeResources="static/index.html"</buildArg>-->
                         <buildArg>-H:Log=registerResource:5</buildArg>
-<!--                        <buildArg>-H:ReflectionConfigurationFiles=reflect-config.json</buildArg>-->
                     </buildArgs>
                 </configuration>
             </plugin>
