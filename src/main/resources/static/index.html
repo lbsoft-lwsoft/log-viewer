@@ -185,6 +185,7 @@
                     automaticLayout: true,
                     lineNumbers: "off",
                     minimap: { enabled: false },
+                    readOnly: true,
                     wordWrap: "on",
                     scrollBeyondLastLine: false,
                     scrollbar: {
@@ -307,7 +308,7 @@
                 var model = editor.getModel();
                 var lastLine = model.getLineCount();
                 var lastLineLength = model.getLineMaxColumn(lastLine);
-
+                editor.updateOptions({ readOnly: false });
                 editor.executeEdits("", [
                     {
                         range: new monaco.Range(
@@ -335,6 +336,7 @@
 
                     editor.setScrollTop(editor.getScrollHeight());
                 }
+                editor.updateOptions({ readOnly: true });
             };
 
             loadSettings();
