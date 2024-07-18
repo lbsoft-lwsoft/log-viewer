@@ -246,6 +246,8 @@
                         const end = lines.lastIndexOf("\n") + 1;
                         message = lines.substring(end);
                         lines = lines.substring(0, end);
+                    } else {
+                        lines = lines.substring(0, lines.length - 1);
                     }
                     lines
                         .split("\n")
