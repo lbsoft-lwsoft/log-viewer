@@ -131,7 +131,17 @@ public class Main {
                 try {
                     final var str = TailReader.readLastNLines(new File(this.serverFilePath.get(serverId))
                             , Integer.parseInt(numberStr));
-                    ctx.channel().writeAndFlush(new TextWebSocketFrame(str));
+                    StringBuilder builder = new StringBuilder();
+                    for (final char c : str.toCharArray()) {
+                        builder.append(c);
+                        if (builder.length() >= 1024) {
+                            ctx.channel().writeAndFlush(new TextWebSocketFrame(builder.toString()));
+                            builder = new StringBuilder();
+                        }
+                    }
+                    if (!builder.isEmpty()) {
+                        ctx.channel().writeAndFlush(new TextWebSocketFrame(builder.toString()));
+                    }
                     this.createWatcher(serverId);
                     this.serverWatchingSessionMap.computeIfAbsent(serverId, k -> new HashSet<>()).add(ctx.channel());
                 } catch (Exception exception) {
@@ -211,9 +221,11 @@ public class Main {
                 charBuffer.flip();
                 final var message = charBuffer.toString();
                 charBuffer.clear();
-                for (final Channel channel : WebSocketFrameHandler.this.serverWatchingSessionMap
-                        .getOrDefault(serverId, Collections.emptySet())) {
-                    channel.writeAndFlush(new TextWebSocketFrame(message));
+                if (!message.isEmpty()) {
+                    for (final Channel channel : WebSocketFrameHandler.this.serverWatchingSessionMap
+                            .getOrDefault(serverId, Collections.emptySet())) {
+                        channel.writeAndFlush(new TextWebSocketFrame(message));
+                    }
                 }
             }
         }

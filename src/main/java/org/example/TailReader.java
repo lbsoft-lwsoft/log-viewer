@@ -11,6 +11,9 @@ public class TailReader {
     private static final int BUFFER_SIZE = 128;
 
     public static String readLastNLines(File file, int n) throws IOException {
+        if (n == 0) {
+            return "";
+        }
         try (var raf = new RandomAccessFile(file, "r"); var out = new ByteArrayOutputStream()) {
             int index;
             int lineCount = 0;
