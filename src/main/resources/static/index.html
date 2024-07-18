@@ -14,6 +14,7 @@
             padding: 0;
             overflow: hidden;
         }
+
         #operationArea {
             position: absolute;
             top: 0;
@@ -26,6 +27,7 @@
             display: flex;
             align-items: center;
         }
+
         #statusIndicator {
             width: 10px;
             height: 10px;
@@ -33,6 +35,7 @@
             background-color: #e74c3c;
             margin-right: 10px;
         }
+
         @keyframes blink {
             0% {
                 background-color: #e74c3c;
@@ -44,9 +47,11 @@
                 background-color: #e74c3c;
             }
         }
+
         #statusIndicator.blinking {
             animation: blink 1s infinite;
         }
+
         #serverSelect,
         #logNumberSelect {
             padding: 5px 10px;
@@ -58,10 +63,12 @@
             outline: none;
             margin-right: 10px;
         }
+
         #serverSelect:focus,
         #logNumberSelect:focus {
             border-color: #1abc9c;
         }
+
         #pauseButton {
             padding: 5px 10px;
             font-size: 16px;
@@ -73,9 +80,11 @@
             outline: none;
             margin-right: 10px;
         }
+
         #pauseButton.paused {
             background-color: #27ae60;
         }
+
         #searchInput {
             padding: 5px 10px;
             font-size: 16px;
@@ -84,18 +93,10 @@
             background-color: #34495e;
             color: white;
             outline: none;
-            margin-right: 10px;
+            margin-right: 100px;
+            flex-grow: 1; /* This will make the input box take up remaining space */
         }
-        #searchButton {
-            padding: 5px 10px;
-            font-size: 16px;
-            border: 1px solid #34495e;
-            border-radius: 4px;
-            background-color: #3498db;
-            color: white;
-            cursor: pointer;
-            outline: none;
-        }
+
         #container {
             position: absolute;
             top: 50px;
@@ -103,6 +104,7 @@
             width: 100%;
             height: calc(100% - 50px);
         }
+
         .highlight {
             background-color: rgb(202, 202, 119);
             color: black;
@@ -245,9 +247,12 @@
                         message = lines.substring(end);
                         lines = lines.substring(0, end);
                     }
-                    lines.split("\n").forEach((line) => {
-                        addLog(line + "\n");
-                    });
+                    lines
+                        .split("\n")
+                        .filter((l) => l)
+                        .forEach((line) => {
+                            addLog(line + "\n");
+                        });
                     if (keyword || decorations.length > 0) {
                         highlightKeywordInEditor(keyword);
                     }
@@ -357,14 +362,16 @@
                 });
 
             document
-                .getElementById("searchButton")
-                .addEventListener("click", function () {
-                    keyword = document.getElementById("searchInput").value;
-                    if (web) {
-                        web.close();
+                .getElementById("searchInput")
+                .addEventListener("keydown", function (event) {
+                    if (event.key === "Enter") {
+                        keyword = this.value;
+                        if (web) {
+                            web.close();
+                        }
+                        editor.setValue("");
+                        connectWebSocket(currentServerId, MAX_LOG_LINES);
                     }
-                    editor.setValue("");
-                    connectWebSocket(currentServerId, MAX_LOG_LINES);
                 });
         });
     </script>
@@ -414,7 +421,6 @@
     </select>
     <button id="pauseButton">暂停</button>
     <input type="text" id="searchInput" placeholder="搜索关键词" />
-    <button id="searchButton">搜索</button>
 </div>
 <div id="container"></div>
 </body>
