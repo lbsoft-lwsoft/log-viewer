@@ -103,12 +103,16 @@
             width: 100%;
             height: calc(100% - 50px);
         }
+        .highlight {
+            background-color: rgb(202, 202, 119);
+            color: black;
+        }
     </style>
     <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.0/min/vs/loader.min.js"></script>
     <script>
         require.config({
             paths: {
-                vs: "https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.0/min/vs",
+                vs: "https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.0/min/vs/",
             },
         });
         require(["vs/editor/editor.main"], function () {
@@ -195,6 +199,9 @@
             let reconnectInterval = 5000;
             let isConnected = false;
             let currentServerId = "ms-e-commerce";
+            let message;
+            let keyword;
+            let decorations = [];
 
             function loadSettings() {
                 const savedServerId = localStorage.getItem("serverId");
@@ -217,6 +224,7 @@
             }
 
             function connectWebSocket(serverId, number) {
+                message = "";
                 if (web) {
                     web.close();
                 }
@@ -228,19 +236,25 @@
 
                 web.onopen = () => {
                     updateStatusIndicator(true);
-                    isConnected = true;
                 };
 
                 web.onmessage = (event) => {
-                    addLog(event.data);
+                    let lines = message + event.data;
+                    if (!lines.endsWith("\n")) {
+                        const end = lines.lastIndexOf("\n") + 1;
+                        message = lines.substring(end);
+                        lines = lines.substring(0, end);
+                    }
+                    lines.split("\n").forEach((line) => {
+                        addLog(line + "\n");
+                    });
+                    if (keyword || decorations.length > 0) {
+                        highlightKeywordInEditor(keyword);
+                    }
                 };
 
                 web.onclose = () => {
                     updateStatusIndicator(false);
-                    setTimeout(
-                        () => connectWebSocket(currentServerId, 1),
-                        reconnectInterval
-                    );
                 };
             }
 
@@ -255,7 +269,34 @@
                 }
             }
 
+            function highlightKeywordInEditor(keyword) {
+                const model = editor.getModel();
+                if (keyword) {
+                    const matches = model.findMatches(
+                        keyword,
+                        true,
+                        false,
+                        false,
+                        null,
+                        true
+                    );
+                    decorations = editor.deltaDecorations(
+                        decorations,
+                        matches.map((match) => ({
+                            range: match.range,
+                            options: {
+                                inlineClassName: "highlight",
+                            },
+                        }))
+                    );
+                } else {
+                    decorations = editor.deltaDecorations(decorations, []);
+                }
+            }
+
             window.addLog = function addLog(log) {
+                if (keyword && !log.includes(keyword)) return;
+
                 var model = editor.getModel();
                 var lastLine = model.getLineCount();
                 var lastLineLength = model.getLineMaxColumn(lastLine);
@@ -289,13 +330,6 @@
                 }
             };
 
-            function filterLogs(keyword) {
-                var model = editor.getModel();
-                var lines = model.getLinesContent();
-                var filteredLines = lines.filter((line) => line.includes(keyword));
-                editor.setValue(filteredLines.join("\n"));
-            }
-
             loadSettings();
             connectWebSocket(currentServerId, MAX_LOG_LINES);
 
@@ -319,14 +353,18 @@
                 .addEventListener("click", function () {
                     isPaused = !isPaused;
                     this.classList.toggle("paused", isPaused);
-                    this.textContent = isPaused ? "Resume" : "Pause";
+                    this.textContent = isPaused ? "恢复" : "暂停";
                 });
 
             document
                 .getElementById("searchButton")
                 .addEventListener("click", function () {
-                    const keyword = document.getElementById("searchInput").value;
-                    filterLogs(keyword);
+                    keyword = document.getElementById("searchInput").value;
+                    if (web) {
+                        web.close();
+                    }
+                    editor.setValue("");
+                    connectWebSocket(currentServerId, MAX_LOG_LINES);
                 });
         });
     </script>
@@ -374,9 +412,9 @@
         <option value="1000" selected>1000</option>
         <option value="10000">10000</option>
     </select>
-    <button id="pauseButton">Pause</button>
-    <input type="text" id="searchInput" placeholder="Search logs..." />
-    <button id="searchButton">Search</button>
+    <button id="pauseButton">暂停</button>
+    <input type="text" id="searchInput" placeholder="搜索关键词" />
+    <button id="searchButton">搜索</button>
 </div>
 <div id="container"></div>
 </body>
