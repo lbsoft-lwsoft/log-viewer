@@ -256,9 +256,6 @@
                         .forEach((line) => {
                             addLog(line + "\n");
                         });
-                    if (keyword || decorations.length > 0) {
-                        highlightKeywordInEditor(keyword);
-                    }
                 };
 
                 web.onclose = () => {
