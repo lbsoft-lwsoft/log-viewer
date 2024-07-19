@@ -106,7 +106,7 @@
         }
 
         .highlight {
-            background-color: rgb(202, 202, 119);
+            background-color: #caca77;
             color: black;
         }
     </style>
@@ -120,21 +120,40 @@
         require(["vs/editor/editor.main"], function () {
             monaco.languages.register({ id: "logLang" });
 
-            monaco.languages.setMonarchTokensProvider("logLang", {
-                tokenizer: {
-                    root: [
-                        [/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}/, "timestamp"],
-                        [/\bINFO\b/, "log-level-info"],
-                        [/\bERROR\b/, "log-level-error"],
-                        [/\bWARN\b/, "log-level-warn"],
-                        [/\bDEBUG\b/, "log-level-debug"],
-                        [/\bTRACE\b/, "log-level-trace"],
-                        [/\[.*?\]/, "thread"],
-                        [/(:)/, "delimiter"],
-                        [/[^ ]+/, "text"],
-                    ],
-                },
-            });
+            function createTokenProvider(keyword) {
+                let rules = [
+                    [/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}/, "timestamp"],
+                    [/\bINFO\b/, "log-level-info"],
+                    [/\bERROR\b/, "log-level-error"],
+                    [/\bWARN\b/, "log-level-warn"],
+                    [/\bDEBUG\b/, "log-level-debug"],
+                    [/\bTRACE\b/, "log-level-trace"],
+                    [/\[.*?\]/, "thread"],
+                    [/(:)/, "delimiter"],
+                    [/[^ ]+/, "text"],
+                ];
+
+                if (keyword) {
+                    rules = [[new RegExp(`${keyword}`, "gi"), "keyword"]];
+                }
+                return {
+                    tokenizer: {
+                        root: rules,
+                    },
+                };
+            }
+
+            function updateTokenProvider(keyword) {
+                monaco.languages.setMonarchTokensProvider(
+                    "logLang",
+                    createTokenProvider(keyword)
+                );
+            }
+
+            monaco.languages.setMonarchTokensProvider(
+                "logLang",
+                createTokenProvider("")
+            );
 
             monaco.editor.defineTheme("logTheme", {
                 base: "vs-dark",
@@ -168,6 +187,12 @@
                     },
                     { token: "thread", foreground: "C586C0" },
                     { token: "delimiter", foreground: "D4D4D4" },
+                    {
+                        token: "keyword",
+                        background: "CACA77",
+                        foreground: "EAEA33",
+                        fontStyle: "bold",
+                    },
                     { token: "text", foreground: "D4D4D4" },
                 ],
                 colors: {
@@ -203,7 +228,7 @@
             let isConnected = false;
             let currentServerId = "ms-e-commerce";
             let message;
-            let keyword;
+            let keyword = "";
             let decorations = [];
 
             function loadSettings() {
@@ -242,20 +267,13 @@
                 };
 
                 web.onmessage = (event) => {
-                    let lines = message + event.data;
-                    if (!lines.endsWith("\n")) {
-                        const end = lines.lastIndexOf("\n") + 1;
-                        message = lines.substring(end);
-                        lines = lines.substring(0, end);
-                    } else {
-                        lines = lines.substring(0, lines.length - 1);
+                    for (let i = 0; i < event.data.length; i++) {
+                        message += event.data[i];
+                        if (event.data[i] === "\n") {
+                            addLog(message);
+                            message = "";
+                        }
                     }
-                    lines
-                        .split("\n")
-                        .filter((l) => l)
-                        .forEach((line) => {
-                            addLog(line + "\n");
-                        });
                 };
 
                 web.onclose = () => {
@@ -271,31 +289,6 @@
                 } else {
                     indicator.classList.add("blinking");
                     indicator.style.backgroundColor = "#e74c3c";
-                }
-            }
-
-            function highlightKeywordInEditor(keyword) {
-                const model = editor.getModel();
-                if (keyword) {
-                    const matches = model.findMatches(
-                        keyword,
-                        true,
-                        false,
-                        false,
-                        null,
-                        true
-                    );
-                    decorations = editor.deltaDecorations(
-                        decorations,
-                        matches.map((match) => ({
-                            range: match.range,
-                            options: {
-                                inlineClassName: "highlight",
-                            },
-                        }))
-                    );
-                } else {
-                    decorations = editor.deltaDecorations(decorations, []);
                 }
             }
 
@@ -339,6 +332,18 @@
             loadSettings();
             connectWebSocket(currentServerId, MAX_LOG_LINES);
 
+            function checkIfAtBottom() {
+                const scrollTop = editor.getScrollTop();
+                const scrollHeight = editor.getScrollHeight();
+                const currentPostion = 3 + (scrollTop / scrollHeight) * 100;
+
+                if (currentPostion >= 100 && isPaused) {
+                    isPaused = false;
+                } else if (!isPaused) {
+                    isPaused = true;
+                }
+            }
+
             document
                 .getElementById("serverSelect")
                 .addEventListener("change", function () {
@@ -354,12 +359,17 @@
                     saveSettings();
                 });
 
+            function setIsPaused(paused) {
+                isPaused = paused;
+                const button = document.getElementById("pauseButton");
+                button.classList.toggle("paused", isPaused);
+                button.textContent = isPaused ? "恢复" : "暂停";
+            }
+
             document
                 .getElementById("pauseButton")
                 .addEventListener("click", function () {
-                    isPaused = !isPaused;
-                    this.classList.toggle("paused", isPaused);
-                    this.textContent = isPaused ? "恢复" : "暂停";
+                    setIsPaused(!isPaused);
                 });
 
             document
@@ -367,6 +377,7 @@
                 .addEventListener("keydown", function (event) {
                     if (event.key === "Enter") {
                         keyword = this.value;
+                        updateTokenProvider(keyword);
                         if (web) {
                             web.close();
                         }
@@ -374,6 +385,50 @@
                         connectWebSocket(currentServerId, MAX_LOG_LINES);
                     }
                 });
+
+            function getVerticalScrollbarEL() {
+                let items = document.getElementsByClassName("slider");
+                for (let i = 0; i < items.length; i++) {
+                    const parent = items[i].parentElement;
+                    if (!parent) {
+                        continue;
+                    }
+                    const classList = parent.classList;
+                    if (
+                        classList.contains("scrollbar") &&
+                        classList.contains("vertical")
+                    ) {
+                        return [items[i], parent];
+                    }
+                }
+            }
+
+            const [slider, sliderParent] = getVerticalScrollbarEL();
+            const observer = new MutationObserver((mutationsList) => {
+                for (let mutation of mutationsList) {
+                    if (
+                        mutation.type === "attributes" &&
+                        mutation.attributeName === "style"
+                    ) {
+                        const sliderHeight = slider.offsetHeight;
+                        const sliderMaxHeight = sliderParent.offsetHeight;
+                        if (sliderHeight !== sliderMaxHeight) {
+                            const topValue = parseInt(
+                                window.getComputedStyle(slider).top.replace("px")
+                            );
+                            if (topValue + sliderHeight === sliderMaxHeight && isPaused) {
+                                setIsPaused(false);
+                            } else if (!isPaused) {
+                                setIsPaused(true);
+                            }
+                        }
+                    }
+                }
+            });
+            observer.observe(slider, {
+                attributes: true,
+                attributeFilter: ["style"],
+            });
         });
     </script>
 </head>
