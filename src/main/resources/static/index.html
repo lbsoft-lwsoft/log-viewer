@@ -116,24 +116,61 @@
             monaco.languages.register({ id: "logLang" });
 
             function createTokenProvider(keyword) {
-                let rules = [
-                    [/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}/, "timestamp"],
-                    [/\bINFO\b/, "log-level-info"],
-                    [/\bERROR\b/, "log-level-error"],
-                    [/\bWARN\b/, "log-level-warn"],
-                    [/\bDEBUG\b/, "log-level-debug"],
-                    [/\bTRACE\b/, "log-level-trace"],
-                    [/\[.*?]/, "thread"],
-                    [/(:)/, "delimiter"],
-                    [/[^ ]+/, "text"],
-                ];
-
                 if (keyword) {
-                    rules = [[new RegExp(`${keyword}`, "gi"), "keyword"]];
+                    return {
+                        tokenizer: {
+                            root: [
+                                [
+                                    /\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}/,
+                                    { token: "timestamp", next: "@logLevel" },
+                                ],
+                                [new RegExp(`${keyword}`, "gi"), { token: "keyword" }],
+                            ],
+                            logLevel: [
+                                [
+                                    /\b[A-Z]+\b/,
+                                    {
+                                        cases: {
+                                            INFO: { token: "log-level-info", next: "@thread" },
+                                            WARN: { token: "log-level-warn", next: "@thread" },
+                                            ERROR: { token: "log-level-error", next: "@thread" },
+                                            DEBUG: { token: "log-level-debug", next: "@thread" },
+                                            TRACE: { token: "log-level-trace", next: "@thread" },
+                                            "@default": { token: "bracket", next: "@thread" },
+                                        },
+                                    },
+                                ],
+                            ],
+                            thread: [[/\[.*?]/, { token: "thread", next: "@root" }]],
+                        },
+                    };
                 }
                 return {
                     tokenizer: {
-                        root: rules,
+                        root: [
+                            [
+                                /\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}/,
+                                { token: "timestamp", next: "@logLevel" },
+                            ],
+                            [/(:)/, "delimiter"],
+                            [/[^ ]+/, "text"],
+                        ],
+                        logLevel: [
+                            [
+                                /\b[A-Z]+\b/,
+                                {
+                                    cases: {
+                                        INFO: { token: "log-level-info", next: "@thread" },
+                                        WARN: { token: "log-level-warn", next: "@thread" },
+                                        ERROR: { token: "log-level-error", next: "@thread" },
+                                        DEBUG: { token: "log-level-debug", next: "@thread" },
+                                        TRACE: { token: "log-level-trace", next: "@thread" },
+                                        "@default": { token: "bracket", next: "@thread" },
+                                    },
+                                },
+                            ],
+                        ],
+                        thread: [[/\[.*?]/, { token: "thread", next: "@root" }]],
                     },
                 };
             }
