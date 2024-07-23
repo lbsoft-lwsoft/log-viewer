@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Monaco Editor Log Window</title>
     <style>
         html,
@@ -104,11 +104,6 @@
             width: 100%;
             height: calc(100% - 50px);
         }
-
-        .highlight {
-            background-color: #caca77;
-            color: black;
-        }
     </style>
     <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.0/min/vs/loader.min.js"></script>
     <script>
@@ -118,8 +113,7 @@
             },
         });
         require(["vs/editor/editor.main"], function () {
-            console.info("aaa")
-            monaco.languages.register({id: "logLang"});
+            monaco.languages.register({ id: "logLang" });
 
             function createTokenProvider(keyword) {
                 let rules = [
@@ -129,7 +123,7 @@
                     [/\bWARN\b/, "log-level-warn"],
                     [/\bDEBUG\b/, "log-level-debug"],
                     [/\bTRACE\b/, "log-level-trace"],
-                    [/\[.*?\]/, "thread"],
+                    [/\[.*?]/, "thread"],
                     [/(:)/, "delimiter"],
                     [/[^ ]+/, "text"],
                 ];
@@ -160,7 +154,7 @@
                 base: "vs-dark",
                 inherit: true,
                 rules: [
-                    {token: "timestamp", foreground: "A0A0A0"},
+                    { token: "timestamp", foreground: "A0A0A0" },
                     {
                         token: "log-level-info",
                         foreground: "569CD6",
@@ -186,15 +180,15 @@
                         foreground: "B5CEA8",
                         fontStyle: "bold",
                     },
-                    {token: "thread", foreground: "C586C0"},
-                    {token: "delimiter", foreground: "D4D4D4"},
+                    { token: "thread", foreground: "C586C0" },
+                    { token: "delimiter", foreground: "D4D4D4" },
                     {
                         token: "keyword",
                         background: "CACA77",
                         foreground: "EAEA33",
                         fontStyle: "bold",
                     },
-                    {token: "text", foreground: "D4D4D4"},
+                    { token: "text", foreground: "D4D4D4" },
                 ],
                 colors: {
                     "editor.background": "#1E1E1E",
@@ -209,18 +203,66 @@
                     language: "logLang",
                     theme: "logTheme",
                     automaticLayout: true,
+                    undoRedo: {
+                        enabled: false,
+                    },
                     lineNumbers: "off",
-                    minimap: {enabled: false},
+                    minimap: { enabled: false },
                     useWebWorkers: true,
                     folding: false, // 禁用代码折叠
                     suggestOnTriggerCharacters: false, // 禁用代码补全
                     readOnly: true,
                     wordWrap: "on",
+                    renderLineHighlight: "none",
+                    renderValidationDecorations: "off",
+                    // 悬停提示
+                    hover: {
+                        enabled: false,
+                    },
                     scrollBeyondLastLine: false,
                     scrollbar: {
                         useShadows: false,
                         vertical: "visible",
                         horizontal: "hidden",
+                    },
+                    // 禁用自动补全
+                    quickSuggestions: {
+                        other: false,
+                        comments: false,
+                        strings: false,
+                    },
+                    parameterHints: {
+                        enabled: false,
+                    },
+                    acceptSuggestionOnEnter: "off",
+                    wordBasedSuggestions: false,
+                    suggest: {
+                        showIcons: false,
+                        showMethods: false,
+                        showFunctions: false,
+                        showConstructors: false,
+                        showFields: false,
+                        showVariables: false,
+                        showClasses: false,
+                        showStructs: false,
+                        showInterfaces: false,
+                        showModules: false,
+                        showProperties: false,
+                        showEvents: false,
+                        showOperators: false,
+                        showUnits: false,
+                        showValues: false,
+                        showConstants: false,
+                        showEnums: false,
+                        showEnumMembers: false,
+                        showKeywords: false,
+                        showWords: false,
+                        showColors: false,
+                        showFiles: false,
+                        showReferences: false,
+                        showFolders: false,
+                        showTypeParameters: false,
+                        showSnippets: false,
                     },
                 }
             );
@@ -268,13 +310,7 @@
                 };
 
                 web.onmessage = (event) => {
-                    for (let i = 0; i < event.data.length; i++) {
-                        message += event.data[i];
-                        if (event.data[i] === "\n") {
-                            addLog(message);
-                            message = "";
-                        }
-                    }
+                    addLogs(event.data);
                 };
 
                 web.onclose = () => {
@@ -293,14 +329,37 @@
                 }
             }
 
-            window.addLog = function addLog(log) {
-                if (keyword && !log.includes(keyword)) return;
+            function addLogs(logs) {
+                let log = "";
+                let message = "";
+                for (let i = 0; i < logs.length; i++) {
+                    message += logs[i];
+                    if (logs[i] === "\n") {
+                        if (!keyword || message.includes(keyword)) {
+                            log += message;
+                        }
+                        message = "";
+                    }
+                }
+                if (!log) {
+                    return;
+                }
 
+                // 清除所有整行装饰
+                editor
+                    .getModel()
+                    .getAllDecorations()
+                    .forEach((decoration) => {
+                        if (decoration.options.isWholeLine) {
+                            editor.deltaDecorations([decoration.id], []);
+                        }
+                    });
                 var model = editor.getModel();
                 var lastLine = model.getLineCount();
                 var lastLineLength = model.getLineMaxColumn(lastLine);
-                editor.updateOptions({readOnly: false});
-                editor.executeEdits("", [
+
+                // 准备编辑操作的数组
+                let edits = [
                     {
                         range: new monaco.Range(
                             lastLine,
@@ -311,39 +370,25 @@
                         text: log,
                         forceMoveMarkers: true,
                     },
-                ]);
-
+                ];
                 if (!isPaused) {
                     if (model.getLineCount() > MAX_LOG_LINES) {
                         var excessLines = model.getLineCount() - MAX_LOG_LINES;
-                        editor.executeEdits("", [
-                            {
-                                range: new monaco.Range(1, 1, excessLines + 1, 1),
-                                text: null,
-                                forceMoveMarkers: true,
-                            },
-                        ]);
+                        edits.push({
+                            range: new monaco.Range(1, 1, excessLines + 1, 1),
+                            text: null,
+                            forceMoveMarkers: true,
+                        });
                     }
-
+                }
+                model.applyEdits(edits);
+                if (!isPaused) {
                     editor.setScrollTop(editor.getScrollHeight());
                 }
-                editor.updateOptions({readOnly: true});
-            };
+            }
 
             loadSettings();
             connectWebSocket(currentServerId, MAX_LOG_LINES);
-
-            function checkIfAtBottom() {
-                const scrollTop = editor.getScrollTop();
-                const scrollHeight = editor.getScrollHeight();
-                const currentPostion = 3 + (scrollTop / scrollHeight) * 100;
-
-                if (currentPostion >= 100 && isPaused) {
-                    isPaused = false;
-                } else if (!isPaused) {
-                    isPaused = true;
-                }
-            }
 
             document
                 .getElementById("serverSelect")
@@ -477,7 +522,7 @@
         <option value="10000">10000</option>
     </select>
     <button id="pauseButton">暂停</button>
-    <input type="text" id="searchInput" placeholder="搜索关键词"/>
+    <input type="text" id="searchInput" placeholder="搜索关键词" />
 </div>
 <div id="container"></div>
 </body>
