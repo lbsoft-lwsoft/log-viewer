@@ -417,7 +417,6 @@
                 .getElementById("pauseButton")
                 .addEventListener("click", function () {
                     const paused = !isPaused;
-                    setIsPaused(paused);
                     if (!paused) {
                         editor.setScrollTop(editor.getScrollHeight());
                     }
