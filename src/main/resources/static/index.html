@@ -314,7 +314,9 @@
                 };
 
                 web.onclose = () => {
+                    web = null;
                     updateStatusIndicator(false);
+                    connectWebSocket(serverId, 1);
                 };
             }
 
@@ -490,35 +492,6 @@
         <option value="wk-crm">CRM</option>
         <option value="ca-studio">花果</option>
         <option value="stu-center">学员中心</option>
-        <option value="tch-studio">老师工作室</option>
-        <option value="cp-automation">账务自动化</option>
-        <option value="wk-talk-cloud">拓课云</option>
-        <option value="ms-e-commerce">电商</option>
-        <option value="cp-gateway">筋斗云</option>
-        <option value="cp-notification">通知服务</option>
-        <option value="ms-cms">ms-cms</option>
-        <option value="cp-public">cp-public</option>
-        <option value="data-service">data-service</option>
-        <option value="ms-account">账号C端</option>
-        <option value="ms-account-business">账号B端</option>
-        <option value="ms-ai">ms-ai</option>
-        <option value="ms-course-resource">ms-course-resource</option>
-        <option value="ms-event-tracking">埋点</option>
-        <option value="ms-im">ms-im</option>
-        <option value="ms-user">ms-user</option>
-        <option value="ms-wechat">ms-wechat</option>
-        <option value="rs-gateway">增长</option>
-        <option value="tch-learning-center">tch-learning-center</option>
-        <option value="tch-research">教研</option>
-        <option value="teaching-admin">teaching-admin</option>
-        <option value="wk-business-gateway">网关B端</option>
-        <option value="wk-classin">wk-classin</option>
-        <option value="wk-classroom-fail-safe">应急服务</option>
-        <option value="wk-finance">账务服务</option>
-        <option value="wk-flowable">工作流</option>
-        <option value="wk-gateway">网关</option>
-        <option value="wk-monitor-admin">wk-monitor-admin</option>
-        <option value="wk-reporting">wk-reporting</option>
     </select>
     <select id="logNumberSelect">
         <option value="100">100</option>
