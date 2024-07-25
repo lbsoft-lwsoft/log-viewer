@@ -414,20 +414,25 @@
                     reset();
                 });
 
-            function setIsPaused(paused) {
+            function updatePausedStatus(paused) {
                 isPaused = paused;
                 const button = document.getElementById("pauseButton");
                 button.classList.toggle("paused", isPaused);
                 button.textContent = isPaused ? "恢复滚动" : "暂停滚动";
-                if (!isPaused) {
-                    editor.setScrollTop(editor.getScrollHeight());
-                }
+            }
+
+            function setIsPaused(paused) {
+                updatePausedStatus(paused);
             }
 
             document
                 .getElementById("pauseButton")
                 .addEventListener("click", function () {
-                    setIsPaused(!isPaused);
+                    if (isPaused) {
+                        editor.setScrollTop(editor.getScrollHeight());
+                    } else {
+                        setIsPaused(true);
+                    }
                 });
 
             document
@@ -470,9 +475,9 @@
                                 window.getComputedStyle(slider).top.replace("px")
                             );
                             if (topValue + sliderHeight === sliderMaxHeight && isPaused) {
-                                setIsPaused(false);
+                                updatePausedStatus(false);
                             } else if (!isPaused) {
-                                setIsPaused(true);
+                                updatePausedStatus(true);
                             }
                         }
                     }
@@ -528,7 +533,7 @@
         <option value="1000" selected>1000</option>
         <option value="10000">10000</option>
     </select>
-    <button id="pauseButton">暂停</button>
+    <button id="pauseButton">暂停滚动</button>
     <input type="text" id="searchInput" placeholder="搜索关键词" />
 </div>
 <div id="container"></div>
