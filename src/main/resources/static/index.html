@@ -418,7 +418,7 @@
                 isPaused = paused;
                 const button = document.getElementById("pauseButton");
                 button.classList.toggle("paused", isPaused);
-                button.textContent = isPaused ? "恢复" : "暂停";
+                button.textContent = isPaused ? "恢复滚动" : "暂停滚动";
                 if (!isPaused) {
                     editor.setScrollTop(editor.getScrollHeight());
                 }
