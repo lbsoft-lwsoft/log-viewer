@@ -112,6 +112,7 @@ public class Main {
         private final ReentrantLock lock = new ReentrantLock();
         private final FileWatcher watcher = new FileWatcher();
         private final Map<String, Set<Channel>> serverWatchingSessionMap = new HashMap<>();
+        private final Map<Channel, ChannelFuture> channelLastFutureMap = new HashMap<>();
         private final Map<String, String> serverFilePath;
 
         public WebSocketFrameHandler(final Map<String, String> serverFilePath) {
@@ -135,7 +136,7 @@ public class Main {
                     for (final char c : str.toCharArray()) {
                         builder.append(c);
                         if (builder.length() >= 1024) {
-                            ctx.channel().writeAndFlush(new TextWebSocketFrame(builder.toString()));
+                            sendMessage(ctx.channel(), builder.toString());
                             builder = new StringBuilder();
                         }
                     }
@@ -165,6 +166,7 @@ public class Main {
                         final var entry = iterator.next();
                         if (entry.getValue().contains(ctx.channel())) {
                             entry.getValue().remove(ctx.channel());
+                            this.channelLastFutureMap.remove(ctx.channel());
                             if (entry.getValue().isEmpty()) {
                                 iterator.remove();
                                 this.watcher.remove(new File(this.serverFilePath.get(entry.getKey())));
@@ -180,6 +182,17 @@ public class Main {
 
         @Override
         protected void channelRead0(final ChannelHandlerContext ctx, final WebSocketFrame msg) {
+        }
+
+        private void sendMessage(Channel channel, String message) {
+            final var frame = new TextWebSocketFrame(message);
+            var future = this.channelLastFutureMap.get(channel);
+            if (future != null) {
+                future = future.addListener(f -> channel.writeAndFlush(frame));
+            } else {
+                future = channel.writeAndFlush(frame);
+            }
+            this.channelLastFutureMap.put(channel, future);
         }
 
         private String getQueryParam(final URI uri, final String paramName) {
@@ -224,7 +237,7 @@ public class Main {
                 if (!message.isEmpty()) {
                     for (final Channel channel : WebSocketFrameHandler.this.serverWatchingSessionMap
                             .getOrDefault(serverId, Collections.emptySet())) {
-                        channel.writeAndFlush(new TextWebSocketFrame(message));
+                        sendMessage(channel, message);
                     }
                 }
             }
