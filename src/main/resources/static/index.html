@@ -117,7 +117,7 @@
 
             function createTokenProvider(keyword) {
                 let rules = [
-                    [/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}/, "timestamp"],
+                    [/\d{4}.\d{2}.\d{2}.\d{2}:\d{2}:\d{2}.\d{3}/, "timestamp"],
                     [/\bINFO\b/, "log-level-info"],
                     [/\bERROR\b/, "log-level-error"],
                     [/\bWARN\b/, "log-level-warn"],
@@ -295,7 +295,6 @@
             }
 
             function connectWebSocket(serverId, number) {
-                message = "";
                 if (web) {
                     web.close();
                 }
@@ -306,6 +305,7 @@
                 );
 
                 web.onopen = () => {
+                    message = "";
                     updateStatusIndicator(true);
                 };
 
@@ -392,20 +392,26 @@
             loadSettings();
             connectWebSocket(currentServerId, MAX_LOG_LINES);
 
+            function reset() {
+                editor.setValue("");
+                updateTokenProvider(keyword);
+                saveSettings();
+                connectWebSocket(currentServerId, MAX_LOG_LINES);
+                setIsPaused(false);
+            }
+
             document
                 .getElementById("serverSelect")
                 .addEventListener("change", function () {
                     currentServerId = this.value;
-                    saveSettings();
-                    setIsPaused(false);
-                    connectWebSocket(currentServerId, MAX_LOG_LINES);
+                    reset();
                 });
 
             document
                 .getElementById("logNumberSelect")
                 .addEventListener("change", function () {
                     MAX_LOG_LINES = parseInt(this.value, 10);
-                    saveSettings();
+                    reset();
                 });
 
             function setIsPaused(paused) {
@@ -413,15 +419,15 @@
                 const button = document.getElementById("pauseButton");
                 button.classList.toggle("paused", isPaused);
                 button.textContent = isPaused ? "恢复" : "暂停";
+                if (!isPaused) {
+                    editor.setScrollTop(editor.getScrollHeight());
+                }
             }
 
             document
                 .getElementById("pauseButton")
                 .addEventListener("click", function () {
-                    const paused = !isPaused;
-                    if (!paused) {
-                        editor.setScrollTop(editor.getScrollHeight());
-                    }
+                    setIsPaused(!isPaused);
                 });
 
             document
@@ -429,12 +435,7 @@
                 .addEventListener("keydown", function (event) {
                     if (event.key === "Enter") {
                         keyword = this.value;
-                        updateTokenProvider(keyword);
-                        if (web) {
-                            web.close();
-                        }
-                        editor.setValue("");
-                        connectWebSocket(currentServerId, MAX_LOG_LINES);
+                        reset();
                     }
                 });
 
