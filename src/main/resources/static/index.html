@@ -52,7 +52,12 @@
             animation: blink 1s infinite;
         }
 
+        #serverSelect {
+            width: 200px;
+        }
+
         #serverSelect,
+        #searchModeSelect,
         #logNumberSelect {
             padding: 5px 10px;
             font-size: 16px;
@@ -65,6 +70,7 @@
         }
 
         #serverSelect:focus,
+        #searchModeSelect:focus,
         #logNumberSelect:focus {
             border-color: #1abc9c;
         }
@@ -93,8 +99,19 @@
             background-color: #34495e;
             color: white;
             outline: none;
-            margin-right: 100px;
-            flex-grow: 1; /* This will make the input box take up remaining space */
+            margin-right: 10px;
+            flex: 1;
+        }
+
+        #contextLinesInput {
+            padding: 5px 10px;
+            font-size: 16px;
+            border: 1px solid #34495e;
+            border-radius: 4px;
+            background-color: #34495e;
+            color: white;
+            outline: none;
+            margin-right: 20px;
         }
 
         #container {
@@ -107,6 +124,55 @@
     </style>
     <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.0/min/vs/loader.min.js"></script>
     <script>
+        class SearchBuffer {
+            constructor(n, keyword, mode = "both") {
+                this.n = n;
+                this.originalN = n;
+                this.keyword = keyword;
+                this.mode = mode;
+                this.down = false;
+                this.buffer = [];
+            }
+
+            search(str) {
+                if (str.includes(this.keyword)) {
+                    let result = [];
+
+                    if (this.mode === "both" || this.mode === "above") {
+                        result = this.buffer.concat(result);
+                    }
+
+                    // Always include the keyword line once
+                    result.push(str);
+
+                    if (this.mode === "both" || this.mode === "below") {
+                        this.down = true;
+                    }
+
+                    this.buffer.length = 0; // Clear the buffer
+                    this.n = this.originalN; // Reset n to the original value
+
+                    return result;
+                }
+
+                if (this.down) {
+                    if (this.n-- > 0) {
+                        return [str];
+                    } else {
+                        this.down = false;
+                        this.n = this.originalN;
+                    }
+                }
+
+                if (this.buffer.length >= this.n) {
+                    this.buffer.shift();
+                }
+                this.buffer.push(str);
+
+                return [];
+            }
+        }
+
         require.config({
             paths: {
                 vs: "https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.0/min/vs/",
@@ -116,24 +182,35 @@
             monaco.languages.register({ id: "logLang" });
 
             function createTokenProvider(keyword) {
-                let rules = [
-                    [/\d{4}.\d{2}.\d{2}.\d{2}:\d{2}:\d{2}.\d{3}/, "timestamp"],
-                    [/\bINFO\b/, "log-level-info"],
-                    [/\bERROR\b/, "log-level-error"],
-                    [/\bWARN\b/, "log-level-warn"],
-                    [/\bDEBUG\b/, "log-level-debug"],
-                    [/\bTRACE\b/, "log-level-trace"],
-                    [/\[.*?\]/, "thread"],
-                    [/(:)/, "delimiter"],
-                    [/[^ ]+/, "text"],
+                let root = [
+                    [
+                        /\d{4}-\d{2}-\d{2}[\sT]\d{2}:\d{2}:\d{2}[,.]\d{3}([+-]\d{2}:\d{2})?/,
+                        { token: "timestamp", next: "@logLevel" },
+                    ],
                 ];
-
                 if (keyword) {
-                    rules = [[new RegExp(`${keyword}`, "gi"), "keyword"]];
+                    root.push([new RegExp(`${keyword}`, "gi"), { token: "keyword" }]);
                 }
                 return {
                     tokenizer: {
-                        root: rules,
+                        root: root,
+                        logLevel: [
+                            [
+                                /[A-Z]+/,
+                                {
+                                    cases: {
+                                        INFO: { token: "log-level-info", next: "@thread" },
+                                        WARN: { token: "log-level-warn", next: "@thread" },
+                                        ERROR: { token: "log-level-error", next: "@thread" },
+                                        DEBUG: { token: "log-level-debug", next: "@thread" },
+                                        TRACE: { token: "log-level-trace", next: "@thread" },
+                                        "@default": { token: "bracket", next: "@thread" },
+                                    },
+                                },
+                            ],
+                        ],
+                        thread: [[/\[.+?]\s+/, { token: "thread", next: "@package" }]],
+                        package: [[/[^\s]+\s/, { token: "package", next: "@root" }]],
                     },
                 };
             }
@@ -273,6 +350,9 @@
             let currentServerId = "ms-e-commerce";
             let message;
             let keyword = "";
+            let searchModel = "keywordOnly";
+            let searchNumber = 50;
+            let searchBuffer = null;
 
             function loadSettings() {
                 const savedServerId = localStorage.getItem("serverId");
@@ -337,8 +417,12 @@
                 for (let i = 0; i < logs.length; i++) {
                     message += logs[i];
                     if (logs[i] === "\n") {
-                        if (!keyword || message.includes(keyword)) {
-                            log += message;
+                        if (keyword && searchBuffer) {
+                            log += searchBuffer.search(message).join();
+                        } else {
+                            if (!keyword || message.includes(keyword)) {
+                                log += message;
+                            }
                         }
                         message = "";
                     }
@@ -394,6 +478,9 @@
 
             function reset() {
                 editor.setValue("");
+                if (keyword) {
+                    searchBuffer = new SearchBuffer(searchNumber, keyword, searchModel);
+                }
                 updateTokenProvider(keyword);
                 saveSettings();
                 connectWebSocket(currentServerId, MAX_LOG_LINES);
@@ -441,6 +528,27 @@
                     if (event.key === "Enter") {
                         keyword = this.value;
                         reset();
+                    }
+                });
+
+            document
+                .getElementById("searchModeSelect")
+                .addEventListener("change", function () {
+                    searchModel = this.value;
+                    if (keyword) {
+                        reset();
+                    }
+                });
+
+            document
+                .getElementById("contextLinesInput")
+                .addEventListener("change", function () {
+                    searchNumber = this.value;
+                    if (keyword) {
+                        reset();
+                    }
+                    if (!this.value) {
+                        this.value = 1;
                     }
                 });
 
@@ -535,6 +643,19 @@
     </select>
     <button id="pauseButton">暂停滚动</button>
     <input type="text" id="searchInput" placeholder="搜索关键词" />
+    <select id="searchModeSelect">
+        <option value="keywordOnly" selected>仅保留关键字行</option>
+        <option value="below">保留后面N行</option>
+        <option value="both">保留前后N行</option>
+        <option value="above">保留前面N行</option>
+    </select>
+    <input
+            type="number"
+            id="contextLinesInput"
+            placeholder="保留行数"
+            value="50"
+            min="0"
+    />
 </div>
 <div id="container"></div>
 </body>
