@@ -353,6 +353,7 @@
             let searchModel = "keywordOnly";
             let searchNumber = 50;
             let searchBuffer = null;
+            let initiativeClose = false;
 
             function loadSettings() {
                 const savedServerId = localStorage.getItem("serverId");
@@ -375,9 +376,6 @@
             }
 
             function connectWebSocket(serverId, number) {
-                if (web) {
-                    web.close();
-                }
                 updateStatusIndicator(false);
 
                 web = new WebSocket(
@@ -386,6 +384,7 @@
 
                 web.onopen = () => {
                     message = "";
+                    initiativeClose = false;
                     updateStatusIndicator(true);
                 };
 
@@ -394,9 +393,10 @@
                 };
 
                 web.onclose = () => {
-                    web = null;
                     updateStatusIndicator(false);
-                    connectWebSocket(serverId, 1);
+                    if (!initiativeClose) {
+                        connectWebSocket(serverId, 1);
+                    }
                 };
             }
 
@@ -477,6 +477,11 @@
             connectWebSocket(currentServerId, MAX_LOG_LINES);
 
             function reset() {
+                if (web) {
+                    initiativeClose = true;
+                    web.close();
+                }
+                message = "";
                 editor.setValue("");
                 if (keyword) {
                     searchBuffer = new SearchBuffer(searchNumber, keyword, searchModel);
