@@ -414,9 +414,9 @@
                     addLogs(event.data);
                 };
 
-                web.onclose = () => {
+                web.onclose = (event) => {
                     updateStatusIndicator(false);
-                    if (!initiativeClose && web) {
+                    if (event.reason !== 'RESET') {
                         connectWebSocket(serverId, 1);
                     }
                 };
@@ -500,7 +500,7 @@
             function reset() {
                 initiativeClose = true;
                 if (web) {
-                    web.close();
+                    web.close(1000, 'RESET');
                     web = null;
                 }
                 message = "";
