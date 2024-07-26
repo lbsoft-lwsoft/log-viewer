@@ -290,6 +290,7 @@
                     suggestOnTriggerCharacters: false, // 禁用代码补全
                     readOnly: true,
                     wordWrap: "on",
+                    contextmenu: false,
                     renderLineHighlight: "none",
                     renderValidationDecorations: "off",
                     // 悬停提示
@@ -343,6 +344,11 @@
                     },
                 }
             );
+
+            // 禁用命令窗口
+            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_P, function() {
+                // 阻止默认行为
+            });
 
             let MAX_LOG_LINES = 1000;
             let isPaused = false;
