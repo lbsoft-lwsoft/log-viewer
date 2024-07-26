@@ -178,19 +178,17 @@
                 vs: "https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.0/min/vs/",
             },
         });
-        require(["vs/editor/editor.main"], function () {
-            fetch("/api/servers")
-                .then((res) => res.json())
-                .then((datas) => {
-                    const select = document.getElementById("serverSelect");
-                    for (let i = 0; i < datas.length; i++) {
-                        const data = datas[i];
-                        const option = document.createElement("option");
-                        option.value = data.value;
-                        option.text = data.label;
-                        select.appendChild(option);
-                    }
-                });
+        require(["vs/editor/editor.main"], async function () {
+            const servers = await fetch("/api/servers")
+                .then((res) => res.json());
+            const select = document.getElementById("serverSelect");
+            for (let i = 0; i < servers.length; i++) {
+                const data = servers[i];
+                const option = document.createElement("option");
+                option.value = data.value;
+                option.text = data.label;
+                select.appendChild(option);
+            }
             monaco.languages.register({ id: "logLang" });
 
             function createTokenProvider(keyword) {
