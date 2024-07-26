@@ -24,6 +24,7 @@ import java.nio.charset.CharsetDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 
 public class Main {
 
@@ -51,7 +52,7 @@ public class Main {
                         ch.pipeline().addLast(new HttpServerCodec());
                         ch.pipeline().addLast(new HttpObjectAggregator(65536));
                         ch.pipeline().addLast(new WebSocketServerProtocolHandler("/log", true));
-                        ch.pipeline().addLast(new HttpServerHandler());
+                        ch.pipeline().addLast(new HttpServerHandler(config.getFiles()));
                         ch.pipeline().addLast(new WebSocketFrameHandler(config.getFiles()));
                     }
                 });
@@ -75,8 +76,25 @@ public class Main {
     public static class HttpServerHandler extends SimpleChannelInboundHandler<HttpObject> {
 
         private final ByteBuf htmlContent;
+        private final ByteBuf serverResponse;
 
-        public HttpServerHandler() {
+        public HttpServerHandler(Map<String, Config.ServerConfig> files) {
+            this.htmlContent = loadHtmlContent();
+            this.serverResponse = loadServerResponse(files);
+        }
+
+        private ByteBuf loadServerResponse(Map<String, Config.ServerConfig> files) {
+            final var servers = files.entrySet().stream().map(entry -> """
+                            {
+                                "value": "%s",
+                                "label": "%s"
+                            }
+                            """.formatted(entry.getKey(), entry.getValue().getLabel()))
+                    .collect(Collectors.joining(","));
+            return Unpooled.copiedBuffer("[%s]".formatted(servers), StandardCharsets.UTF_8);
+        }
+
+        private ByteBuf loadHtmlContent() {
             try (var in = Main.class.getClassLoader().getResourceAsStream("./static/index.html"); var out = new ByteArrayOutputStream()) {
                 if (in == null) {
                     throw new RuntimeException("File not found, static/index.html");
@@ -86,7 +104,7 @@ public class Main {
                 while ((index = in.read(buf)) != -1) {
                     out.write(buf, 0, index);
                 }
-                htmlContent = Unpooled.copiedBuffer(out.toByteArray());
+                return Unpooled.copiedBuffer(out.toByteArray());
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -94,13 +112,23 @@ public class Main {
 
         @Override
         protected void channelRead0(ChannelHandlerContext ctx, HttpObject msg) {
-            if (msg instanceof HttpRequest) {
-                FullHttpResponse response = new DefaultFullHttpResponse(
-                        HttpVersion.HTTP_1_1,
-                        HttpResponseStatus.OK,
-                        this.htmlContent);
-                response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
-                response.headers().set(HttpHeaderNames.CONTENT_LENGTH, this.htmlContent.readableBytes());
+            if (msg instanceof HttpRequest request) {
+                FullHttpResponse response;
+                if (request.method() == HttpMethod.GET && "/api/servers".equals(request.uri())) {
+                    response = new DefaultFullHttpResponse(
+                            HttpVersion.HTTP_1_1,
+                            HttpResponseStatus.OK,
+                            serverResponse);
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json; charset=UTF-8");
+                    response.headers().set(HttpHeaderNames.CONTENT_LENGTH, this.serverResponse.readableBytes());
+                } else {
+                    response = new DefaultFullHttpResponse(
+                            HttpVersion.HTTP_1_1,
+                            HttpResponseStatus.OK,
+                            this.htmlContent);
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+                    response.headers().set(HttpHeaderNames.CONTENT_LENGTH, this.htmlContent.readableBytes());
+                }
                 ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
             }
         }
@@ -113,9 +141,9 @@ public class Main {
         private final FileWatcher watcher = new FileWatcher();
         private final Map<String, Set<Channel>> serverWatchingSessionMap = new HashMap<>();
         private final Map<Channel, ChannelFuture> channelLastFutureMap = new HashMap<>();
-        private final Map<String, String> serverFilePath;
+        private final Map<String, Config.ServerConfig> serverFilePath;
 
-        public WebSocketFrameHandler(final Map<String, String> serverFilePath) {
+        public WebSocketFrameHandler(final Map<String, Config.ServerConfig> serverFilePath) {
             this.serverFilePath = serverFilePath;
         }
 
@@ -130,7 +158,7 @@ public class Main {
                 }
                 lock.lock();
                 try {
-                    final var str = TailReader.readLastNLines(new File(this.serverFilePath.get(serverId))
+                    final var str = TailReader.readLastNLines(new File(this.serverFilePath.get(serverId).getPath())
                             , Integer.parseInt(numberStr));
                     StringBuilder builder = new StringBuilder();
                     for (final char c : str.toCharArray()) {
@@ -169,7 +197,7 @@ public class Main {
                             this.channelLastFutureMap.remove(ctx.channel());
                             if (entry.getValue().isEmpty()) {
                                 iterator.remove();
-                                this.watcher.remove(new File(this.serverFilePath.get(entry.getKey())));
+                                this.watcher.remove(new File(this.serverFilePath.get(entry.getKey()).getPath()));
                             }
                         }
                     }
@@ -212,7 +240,7 @@ public class Main {
         }
 
         private void createWatcher(final String serverId) throws IOException {
-            final var file = new File(this.serverFilePath.get(serverId));
+            final var file = new File(this.serverFilePath.get(serverId).getPath());
             if (!watcher.contains(file)) {
                 this.watcher.addListener(file, new Sender(serverId));
             }
@@ -246,22 +274,43 @@ public class Main {
 
     public static class Config {
         Integer port;
-        Map<String, String> files;
+        Map<String, ServerConfig> files;
 
         public Integer getPort() {
             return port;
         }
 
-        public void setPort(final Integer port) {
+        public void setPort(Integer port) {
             this.port = port;
         }
 
-        public Map<String, String> getFiles() {
+        public Map<String, ServerConfig> getFiles() {
             return files;
         }
 
-        public void setFiles(final Map<String, String> files) {
+        public void setFiles(Map<String, ServerConfig> files) {
             this.files = files;
+        }
+
+        public static class ServerConfig {
+            String label;
+            String path;
+
+            public String getLabel() {
+                return label;
+            }
+
+            public void setLabel(String label) {
+                this.label = label;
+            }
+
+            public String getPath() {
+                return path;
+            }
+
+            public void setPath(String path) {
+                this.path = path;
+            }
         }
     }
 }

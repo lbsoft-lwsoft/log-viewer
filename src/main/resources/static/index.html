@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Monaco Editor Log Window</title>
     <style>
         html,
@@ -179,17 +179,27 @@
             },
         });
         require(["vs/editor/editor.main"], function () {
-            monaco.languages.register({ id: "logLang" });
+            fetch("/api/servers").then(res => res.json()).then(datas => {
+                const select = document.getElementById("serverSelect");
+                for (let i = 0; i < datas.length; i++) {
+                    const data = datas[i];
+                    const option = document.createElement("option");
+                    option.value = data.value;
+                    option.text = data.label;
+                    select.appendChild(option);
+                }
+            })
+            monaco.languages.register({id: "logLang"});
 
             function createTokenProvider(keyword) {
                 let root = [
                     [
                         /\d{4}-\d{2}-\d{2}[\sT]\d{2}:\d{2}:\d{2}[,.]\d{3}([+-]\d{2}:\d{2})?/,
-                        { token: "timestamp", next: "@logLevel" },
+                        {token: "timestamp", next: "@logLevel"},
                     ],
                 ];
                 if (keyword) {
-                    root.push([new RegExp(`${keyword}`, "gi"), { token: "keyword" }]);
+                    root.push([new RegExp(`${keyword}`, "gi"), {token: "keyword"}]);
                 }
                 return {
                     tokenizer: {
@@ -199,18 +209,18 @@
                                 /[A-Z]+/,
                                 {
                                     cases: {
-                                        INFO: { token: "log-level-info", next: "@thread" },
-                                        WARN: { token: "log-level-warn", next: "@thread" },
-                                        ERROR: { token: "log-level-error", next: "@thread" },
-                                        DEBUG: { token: "log-level-debug", next: "@thread" },
-                                        TRACE: { token: "log-level-trace", next: "@thread" },
-                                        "@default": { token: "bracket", next: "@thread" },
+                                        INFO: {token: "log-level-info", next: "@thread"},
+                                        WARN: {token: "log-level-warn", next: "@thread"},
+                                        ERROR: {token: "log-level-error", next: "@thread"},
+                                        DEBUG: {token: "log-level-debug", next: "@thread"},
+                                        TRACE: {token: "log-level-trace", next: "@thread"},
+                                        "@default": {token: "bracket", next: "@thread"},
                                     },
                                 },
                             ],
                         ],
-                        thread: [[/\[.+?]\s+/, { token: "thread", next: "@package" }]],
-                        package: [[/[^\s]+\s/, { token: "package", next: "@root" }]],
+                        thread: [[/\[.+?]\s+/, {token: "thread", next: "@package"}]],
+                        package: [[/[^\s]+\s/, {token: "package", next: "@root"}]],
                     },
                 };
             }
@@ -231,7 +241,7 @@
                 base: "vs-dark",
                 inherit: true,
                 rules: [
-                    { token: "timestamp", foreground: "A0A0A0" },
+                    {token: "timestamp", foreground: "A0A0A0"},
                     {
                         token: "log-level-info",
                         foreground: "569CD6",
@@ -257,16 +267,16 @@
                         foreground: "B5CEA8",
                         fontStyle: "bold",
                     },
-                    { token: "thread", foreground: "C586C0" },
-                    { token: "delimiter", foreground: "D4D4D4" },
+                    {token: "thread", foreground: "C586C0"},
+                    {token: "delimiter", foreground: "D4D4D4"},
                     {
                         token: "keyword",
                         background: "CACA77",
                         foreground: "EAEA33",
                         fontStyle: "bold",
                     },
-                    { token: "text", foreground: "D4D4D4" },
-                    { token: "package", foreground: "A28D6A" },
+                    {token: "text", foreground: "D4D4D4"},
+                    {token: "package", foreground: "A28D6A"},
                 ],
                 colors: {
                     "editor.background": "#1E1E1E",
@@ -285,7 +295,7 @@
                         enabled: false,
                     },
                     lineNumbers: "off",
-                    minimap: { enabled: false },
+                    minimap: {enabled: false},
                     useWebWorkers: true,
                     folding: false, // 禁用代码折叠
                     suggestOnTriggerCharacters: false, // 禁用代码补全
@@ -656,7 +666,7 @@
         <option value="10000">10000</option>
     </select>
     <button id="pauseButton">暂停滚动</button>
-    <input type="text" id="searchInput" placeholder="搜索关键词" />
+    <input type="text" id="searchInput" placeholder="搜索关键词"/>
     <select id="searchModeSelect">
         <option value="keywordOnly" selected>仅保留关键字行</option>
         <option value="below">保留后面N行</option>
