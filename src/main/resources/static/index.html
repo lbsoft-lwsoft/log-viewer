@@ -415,7 +415,7 @@
                 };
 
                 web.onclose = (event) => {
-                    if (event.reason !== 'RESET') {
+                    if (event.reason !== "RESET") {
                         connectWebSocket(serverId, 1);
                     } else {
                         updateStatusIndicator(false);
@@ -501,7 +501,7 @@
             function reset() {
                 initiativeClose = true;
                 if (web) {
-                    web.close(1000, 'RESET');
+                    web.close(1000, "RESET");
                     web = null;
                 }
                 message = "";
@@ -532,8 +532,8 @@
             function updatePausedStatus(paused) {
                 isPaused = paused;
                 const button = document.getElementById("pauseButton");
-                button.classList.toggle("paused", isPaused);
-                button.textContent = isPaused ? "恢复滚动" : "暂停滚动";
+                button.classList.toggle("paused", !isPaused);
+                button.textContent = isPaused ? "已停止滚动" : "自动滚动中";
             }
 
             function setIsPaused(paused) {
@@ -545,8 +545,6 @@
                 .addEventListener("click", function () {
                     if (isPaused) {
                         editor.setScrollTop(editor.getScrollHeight());
-                    } else {
-                        setIsPaused(true);
                     }
                 });
 
@@ -629,47 +627,13 @@
 <body>
 <div id="operationArea">
     <div id="statusIndicator"></div>
-    <select id="serverSelect">
-        <option value="cp-scheduling">排课</option>
-        <option value="wk-crm">CRM</option>
-        <option value="ca-studio">花果</option>
-        <option value="stu-center">学员中心</option>
-        <option value="tch-studio">老师工作室</option>
-        <option value="cp-automation">账务自动化</option>
-        <option value="wk-talk-cloud">拓课云</option>
-        <option value="ms-e-commerce">电商</option>
-        <option value="cp-gateway">筋斗云</option>
-        <option value="cp-notification">通知服务</option>
-        <option value="ms-cms">ms-cms</option>
-        <option value="cp-public">cp-public</option>
-        <option value="data-service">data-service</option>
-        <option value="ms-account">账号C端</option>
-        <option value="ms-account-business">账号B端</option>
-        <option value="ms-ai">ms-ai</option>
-        <option value="ms-course-resource">ms-course-resource</option>
-        <option value="ms-event-tracking">埋点</option>
-        <option value="ms-im">ms-im</option>
-        <option value="ms-user">ms-user</option>
-        <option value="ms-wechat">ms-wechat</option>
-        <option value="rs-gateway">增长</option>
-        <option value="tch-learning-center">tch-learning-center</option>
-        <option value="tch-research">教研</option>
-        <option value="teaching-admin">teaching-admin</option>
-        <option value="wk-business-gateway">网关B端</option>
-        <option value="wk-classin">wk-classin</option>
-        <option value="wk-classroom-fail-safe">应急服务</option>
-        <option value="wk-finance">账务服务</option>
-        <option value="wk-flowable">工作流</option>
-        <option value="wk-gateway">网关</option>
-        <option value="wk-monitor-admin">wk-monitor-admin</option>
-        <option value="wk-reporting">wk-reporting</option>
-    </select>
+    <button id="pauseButton">自动滚动中</button>
+    <select id="serverSelect"></select>
     <select id="logNumberSelect">
         <option value="100">100</option>
         <option value="1000" selected>1000</option>
         <option value="10000">10000</option>
     </select>
-    <button id="pauseButton">暂停滚动</button>
     <input type="text" id="searchInput" placeholder="搜索关键词" />
     <select id="searchModeSelect">
         <option value="keywordOnly" selected>仅保留关键字行</option>
