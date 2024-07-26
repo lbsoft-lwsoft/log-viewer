@@ -496,8 +496,8 @@
             connectWebSocket(currentServerId, MAX_LOG_LINES);
 
             function reset() {
+                initiativeClose = true;
                 if (web) {
-                    initiativeClose = true;
                     web.close();
                 }
                 message = "";
