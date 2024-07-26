@@ -266,6 +266,7 @@
                         fontStyle: "bold",
                     },
                     { token: "text", foreground: "D4D4D4" },
+                    { token: "package", foreground: "A28D6A" },
                 ],
                 colors: {
                     "editor.background": "#1E1E1E",
@@ -346,9 +347,12 @@
             );
 
             // 禁用命令窗口
-            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_P, function() {
-                // 阻止默认行为
-            });
+            editor.addCommand(
+                monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_P,
+                function () {
+                    // 阻止默认行为
+                }
+            );
 
             let MAX_LOG_LINES = 1000;
             let isPaused = false;
