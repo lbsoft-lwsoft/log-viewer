@@ -415,9 +415,10 @@
                 };
 
                 web.onclose = (event) => {
-                    updateStatusIndicator(false);
                     if (event.reason !== 'RESET') {
                         connectWebSocket(serverId, 1);
+                    } else {
+                        updateStatusIndicator(false);
                     }
                 };
             }
