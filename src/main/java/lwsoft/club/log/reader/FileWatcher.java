@@ -1,4 +1,4 @@
-package org.example;
+package lwsoft.club.log.reader;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

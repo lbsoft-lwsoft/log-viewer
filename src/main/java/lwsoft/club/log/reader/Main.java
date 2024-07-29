@@ -1,4 +1,4 @@
-package org.example;
+package lwsoft.club.log.reader;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;

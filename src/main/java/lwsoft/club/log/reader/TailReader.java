@@ -1,4 +1,4 @@
-package org.example;
+package lwsoft.club.log.reader;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
