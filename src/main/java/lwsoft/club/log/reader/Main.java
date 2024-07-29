@@ -35,7 +35,7 @@ public class Main {
         final var config = getServerLogConfig();
         if (config == null) {
             var currentDir = System.getProperty("user.dir");
-            LOGGER.error("No config found or Config format error, please check {}{}config.yaml", currentDir, File.separator);
+            LOGGER.error("No config found or Config format error, please check {} {} config.yaml", currentDir, File.separator);
             return;
         }
         if (config.getPort() == null) {
@@ -68,11 +68,14 @@ public class Main {
     }
 
     private static Config getServerLogConfig() {
-        var currentDir = System.getProperty("user.dir");
-        Yaml yaml = new Yaml();
-        try (InputStream inputStream = new FileInputStream(currentDir + File.separator + "config.yaml")) {
+        final var currentDir = System.getProperty("user.dir");
+        final var path = currentDir + File.separator + "config.yaml";
+        LOGGER.info("Loading config {}", path);
+        final Yaml yaml = new Yaml();
+        try (InputStream inputStream = new FileInputStream(path)) {
             return yaml.loadAs(inputStream, Config.class);
-        } catch (IOException ignored) {
+        } catch (IOException e) {
+            LOGGER.error("Loading config {} error: {}", path, e.getMessage());
         }
         return null;
     }
