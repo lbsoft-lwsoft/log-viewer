@@ -31,6 +31,7 @@ public class Main {
     private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
 
     public static void main(String[] args) throws InterruptedException {
+        LOGGER.info("Log viewer is starting...");
         final var config = getServerLogConfig();
         if (config == null) {
             var currentDir = System.getProperty("user.dir");
@@ -56,7 +57,10 @@ public class Main {
                         ch.pipeline().addLast(new WebSocketFrameHandler(config.getFiles()));
                     }
                 });
-        ChannelFuture f = b.bind(config.getPort()).sync();
+        config.getFiles().forEach((k, v) -> LOGGER.info("Server {} listening at {}:{}", k, v.getLabel(), v.getPath()));
+        ChannelFuture f = b.bind(config.getPort())
+                .addListener((o) -> LOGGER.info("Log viewer is successfully started on port {}", config.getPort()))
+                .sync();
         f.channel().closeFuture().addListener(future -> {
             workerGroup.shutdownGracefully();
             bossGroup.shutdownGracefully();
