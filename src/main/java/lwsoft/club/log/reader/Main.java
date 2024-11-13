@@ -102,9 +102,13 @@ public class Main {
         }
 
         private ByteBuf loadHtmlContent() {
-            try (var in = Main.class.getClassLoader().getResourceAsStream("./static/index.html"); var out = new ByteArrayOutputStream()) {
+            return loadFile("./static/index.html");
+        }
+
+        private ByteBuf loadFile(String path) {
+            try (var in = Main.class.getClassLoader().getResourceAsStream(path); var out = new ByteArrayOutputStream()) {
                 if (in == null) {
-                    throw new RuntimeException("File not found, static/index.html");
+                    throw new RuntimeException("File not found, " + path);
                 }
                 int index;
                 var buf = new byte[1024];
@@ -128,6 +132,21 @@ public class Main {
                             serverResponse);
                     response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json; charset=UTF-8");
                     response.headers().set(HttpHeaderNames.CONTENT_LENGTH, this.serverResponse.readableBytes());
+                } else if (request.method() == HttpMethod.GET && request.uri().startsWith("/vs")) {
+                    final var byteBuf = loadFile("./static" + request.uri());
+                    response = new DefaultFullHttpResponse(
+                            HttpVersion.HTTP_1_1,
+                            HttpResponseStatus.OK,
+                            byteBuf);
+                    final var type = request.uri().substring(request.uri().lastIndexOf(".")).toLowerCase();
+                    String contentType = switch (type) {
+                        case "css" -> "text/css";
+                        case "js" -> "text/javascript";
+                        case "ttf" -> "text/x-ttf";
+                        default -> "text/plain";
+                    };
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, contentType);
+                    response.headers().set(HttpHeaderNames.CONTENT_LENGTH, byteBuf.readableBytes());
                 } else {
                     response = new DefaultFullHttpResponse(
                             HttpVersion.HTTP_1_1,
