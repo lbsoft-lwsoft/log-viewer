@@ -12,6 +12,7 @@ import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
 import io.netty.util.AttributeKey;
+import io.netty.util.concurrent.GenericFutureListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
@@ -125,6 +126,7 @@ public class Main {
         protected void channelRead0(ChannelHandlerContext ctx, HttpObject msg) {
             if (msg instanceof HttpRequest request) {
                 FullHttpResponse response;
+                List<GenericFutureListener<ChannelFuture>> listeners = new ArrayList<>(List.of(ChannelFutureListener.CLOSE));
                 if (request.method() == HttpMethod.GET && "/api/servers".equals(request.uri())) {
                     response = new DefaultFullHttpResponse(
                             HttpVersion.HTTP_1_1,
@@ -147,6 +149,7 @@ public class Main {
                     };
                     response.headers().set(HttpHeaderNames.CONTENT_TYPE, contentType);
                     response.headers().set(HttpHeaderNames.CONTENT_LENGTH, byteBuf.readableBytes());
+                    listeners.add((f) -> byteBuf.release());
                 } else {
                     response = new DefaultFullHttpResponse(
                             HttpVersion.HTTP_1_1,
@@ -155,7 +158,10 @@ public class Main {
                     response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
                     response.headers().set(HttpHeaderNames.CONTENT_LENGTH, this.htmlContent.readableBytes());
                 }
-                ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
+                final var channelFuture = ctx.writeAndFlush(response);
+                for (final GenericFutureListener<ChannelFuture> listener : listeners) {
+                    channelFuture.addListener(listener);
+                }
             }
         }
     }
