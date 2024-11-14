@@ -12,7 +12,6 @@ import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
 import io.netty.util.AttributeKey;
-import io.netty.util.concurrent.GenericFutureListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
@@ -83,12 +82,10 @@ public class Main {
 
     public static class HttpServerHandler extends SimpleChannelInboundHandler<HttpObject> {
 
-        private final ByteBuf htmlContent;
-        private final ByteBuf serverResponse;
+        final Map<String, Config.ServerConfig> files;
 
         public HttpServerHandler(Map<String, Config.ServerConfig> files) {
-            this.htmlContent = loadHtmlContent();
-            this.serverResponse = loadServerResponse(files);
+            this.files = files;
         }
 
         private ByteBuf loadServerResponse(Map<String, Config.ServerConfig> files) {
@@ -125,43 +122,31 @@ public class Main {
         @Override
         protected void channelRead0(ChannelHandlerContext ctx, HttpObject msg) {
             if (msg instanceof HttpRequest request) {
-                FullHttpResponse response;
-                List<GenericFutureListener<ChannelFuture>> listeners = new ArrayList<>(List.of(ChannelFutureListener.CLOSE));
+                ByteBuf byteBuf;
+                String contentType;
                 if (request.method() == HttpMethod.GET && "/api/servers".equals(request.uri())) {
-                    response = new DefaultFullHttpResponse(
-                            HttpVersion.HTTP_1_1,
-                            HttpResponseStatus.OK,
-                            serverResponse);
-                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json; charset=UTF-8");
-                    response.headers().set(HttpHeaderNames.CONTENT_LENGTH, this.serverResponse.readableBytes());
+                    byteBuf = loadServerResponse(files);
+                    contentType = "application/json; charset=UTF-8";
                 } else if (request.method() == HttpMethod.GET && request.uri().startsWith("/vs")) {
-                    final var byteBuf = loadFile("./static" + request.uri());
-                    response = new DefaultFullHttpResponse(
-                            HttpVersion.HTTP_1_1,
-                            HttpResponseStatus.OK,
-                            byteBuf);
                     final var type = request.uri().substring(request.uri().lastIndexOf(".")).toLowerCase();
-                    String contentType = switch (type) {
+                    byteBuf = loadFile("./static" + request.uri());
+                    contentType = switch (type) {
                         case "css" -> "text/css";
                         case "js" -> "text/javascript";
                         case "ttf" -> "text/x-ttf";
                         default -> "text/plain";
                     };
-                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, contentType);
-                    response.headers().set(HttpHeaderNames.CONTENT_LENGTH, byteBuf.readableBytes());
-                    listeners.add((f) -> byteBuf.release());
                 } else {
-                    response = new DefaultFullHttpResponse(
-                            HttpVersion.HTTP_1_1,
-                            HttpResponseStatus.OK,
-                            this.htmlContent);
-                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
-                    response.headers().set(HttpHeaderNames.CONTENT_LENGTH, this.htmlContent.readableBytes());
+                    byteBuf = loadHtmlContent();
+                    contentType = "text/html; charset=UTF-8";
                 }
-                final var channelFuture = ctx.writeAndFlush(response);
-                for (final GenericFutureListener<ChannelFuture> listener : listeners) {
-                    channelFuture.addListener(listener);
-                }
+                final var response = new DefaultFullHttpResponse(
+                        HttpVersion.HTTP_1_1,
+                        HttpResponseStatus.OK,
+                        byteBuf);
+                response.headers().set(HttpHeaderNames.CONTENT_TYPE, contentType);
+                response.headers().set(HttpHeaderNames.CONTENT_LENGTH, byteBuf.readableBytes());
+                ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
             }
         }
     }
@@ -218,6 +203,7 @@ public class Main {
 
         @Override
         public void channelInactive(final ChannelHandlerContext ctx) throws Exception {
+            this.channelLastFutureMap.remove(ctx.channel());
             if (ctx.channel().hasAttr(WEB_SOCKET_FLAG)) {
                 lock.lock();
                 try {
@@ -226,7 +212,6 @@ public class Main {
                         final var entry = iterator.next();
                         if (entry.getValue().contains(ctx.channel())) {
                             entry.getValue().remove(ctx.channel());
-                            this.channelLastFutureMap.remove(ctx.channel());
                             if (entry.getValue().isEmpty()) {
                                 iterator.remove();
                                 this.watcher.remove(new File(this.serverFilePath.get(entry.getKey()).getPath()));
